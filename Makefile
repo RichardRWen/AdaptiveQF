@@ -1,6 +1,6 @@
 TARGETS=test test_threadsafe test_pc bm
 
-ifdef D
+ifndef D
 	DEBUG=-g
 	OPT=
 else
@@ -8,7 +8,7 @@ else
 	OPT=-Ofast
 endif
 
-ifdef NH
+ifndef NH
 	ARCH=
 else
 	ARCH=-msse4.2 -D__SSE4_2_
@@ -97,4 +97,3 @@ $(OBJDIR):
 
 clean:
 	rm -rf $(OBJDIR) $(TARGETS) core
-

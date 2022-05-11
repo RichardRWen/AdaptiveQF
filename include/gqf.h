@@ -186,8 +186,8 @@ extern "C" {
 		 present in the QF. Only returns the first value associated with key
 		 in the QF.  If you want to see others, use an iterator. 
 		 May return QF_COULDNT_LOCK if called with QF_TRY_LOCK.  */
-	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t
-										flags);
+	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t value, uint64_t* ret_index, uint64_t* ret_hash, uint8_t flags);
+	int qf_adapt(QF *qf, uint64_t index, uint64_t hash, uint64_t other_hash, uint8_t flags);
 
 	/* Return the number of times key has been inserted, with any value,
 		 into qf. */

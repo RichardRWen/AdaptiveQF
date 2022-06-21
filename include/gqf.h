@@ -143,6 +143,9 @@ extern "C" {
 	 */
 	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 								flags);
+	int qf_insert_ret(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
+								flags, uint64_t *ret_index, uint64_t *ret_hash, uint64_t *ret_hash_len);
+	int insert_and_extend(QF *qf, uint64_t index, uint64_t key, uint64_t value, uint64_t count, uint64_t other_key, uint64_t other_value, uint8_t flags);
 
 	/* Set the counter for this key/value pair to count. 
 	 Return value: Same as qf_insert. 

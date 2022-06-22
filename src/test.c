@@ -36,6 +36,7 @@ struct _keyValuePair {
 
 struct _ilist {
 	int i;
+	int length;
 	struct ilist *next;
 } typedef ilist;
 typedef struct sglib_hashed_ilist_iterator ilist_iter;
@@ -57,6 +58,18 @@ int find(uint64_t* array, int len, uint64_t item) {
 	for (i = 0; i < len; i++)
 		if (array[i] == item) return 1;
 	return 0;
+}
+
+// returns the number of low order bits on which hash1 and hash2 match
+int hashCmp(uint64_t hash1, uint64_t hash2) {
+	//printf("hashCmp: %lu, %lu\n", hash1, hash2);
+	int i;
+	for (i = 0; i < 64; i++) {
+		if ((hash1 & 1) != (hash2 & 1)) break;
+		hash1 >>= 1;
+		hash2 >>= 1;
+	}
+	return i;
 }
 
 keyValuePair *getItem(keyValuePair *root, uint64_t hash) {
@@ -93,18 +106,6 @@ keyValuePair *insertItem(keyValuePair* root, keyValuePair *item) {
 	return root;
 }
 
-// returns the number of low order bits on which hash1 and hash2 match
-int hashCmp(uint64_t hash1, uint64_t hash2) {
-	//printf("hashCmp: %lu, %lu\n", hash1, hash2);
-	int i;
-	for (i = 0; i < 64; i++) {
-		if ((hash1 & 1) != (hash2 & 1)) break;
-		hash1 >>= 1;
-		hash2 >>= 1;
-	}
-	return i;
-}
-
 int matchpart(uint64_t item, uint64_t hash, uint64_t hash_len, uint64_t qbits, uint64_t rbits) {
 	if ((item & ((2 << rbits) - 1)) != (hash & ((2 << rbits) - 1))) return 0;
 	hash_len -= rbits;
@@ -136,12 +137,16 @@ void printbin(uint64_t val) {
 
 int main(int argc, char **argv)
 {
-	
 	if (argc < 6) {
-		fprintf(stderr, "Please specify \nthe log of the number of slots in the QF\nthe number of remainder bits in the QF\nthe universe size\nthe number of inserts\nthe number of queries\n");
-		// eg. ./test 8 7 1000000 100 10000
+		fprintf(stderr, "Please specify \nthe log of the number of slots in the QF\nthe number of remainder bits in the QF\nthe universe size\nthe number of inserts\nthe number of queries\nthe number of trials\n");
+		// eg. ./test 8 7 100000000 20000000 1000000 20
 		exit(1);
 	}
+	
+	srand(time(NULL));
+	double avgTime = 0, avgFP = 0, avgFill = 0;
+	int trials = 0;
+	for (; trials < 20; trials++) {
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t rbits = atoi(argv[2]);
@@ -162,7 +167,7 @@ int main(int argc, char **argv)
 		abort();
 	}
 
-	qf_set_auto_resize(&qf, true);
+	qf_set_auto_resize(&qf, false);
 	
 	int universe = atoi(argv[3]);//1000000;
 	int num_inserts = atoi(argv[4]);//100;
@@ -198,7 +203,18 @@ int main(int argc, char **argv)
 	printf("collided query expected, got %d\n", qf_insert_ret(&qf, 1 + qf.metadata->range, 0, 1, QF_KEY_IS_HASH | QF_NO_LOCK, ret_index, ret_hash, ret_hash_len));
 	printf("extended length: %d\n", insert_and_extend(&qf, *ret_index, 1 + qf.metadata->range, 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK));*/
 	
-	srand(time(NULL));
+	if (0) {
+		printf("%d\n", QF_COULDNT_LOCK);
+		uint64_t q = 0, p = 0, m;
+		for (m = 0; m < num_queries; m++) {
+			q = (uint64_t)(rand() % universe);
+			if (q % (1 << rbits) < (1 << qbits) && q % (1 << rbits) == 0) {
+				p++;
+			}
+		}
+		printf("false positive rate: %f\n", (double) p / num_queries);
+		abort();
+	}
 	
 	keyValuePair *val_mem = malloc(sizeof(keyValuePair) * fmax(num_inserts, nslots));
 	if (val_mem == NULL) {
@@ -214,7 +230,7 @@ int main(int argc, char **argv)
 	int break_cond = 0;
 	
 	uint64_t i, j, k = 0, l = 0;
-	for (i = 0; i < num_inserts && l < nslots; i++) {
+	for (i = 0; i < num_inserts && l < nslots;i++) {
 		j = (uint64_t)(rand() % universe);
 		//printf("inserting %lu\n", j);
 		//if (values == NULL || getItem(values, j)->key != j) {
@@ -234,11 +250,7 @@ int main(int argc, char **argv)
 				printf("filter is full after %lu inserts\n", i);
 				break;
 			}
-			else if (ret == -1) {
-				printf("other error\n");
-				break;
-			}
-			else if (!ret) {
+			else if (ret == 0) {
 				if (1) {
 					//printf("wanted to extend, skipping for testing\n");
 					k++;
@@ -252,7 +264,7 @@ int main(int argc, char **argv)
 				}
 				//printf("extended to length %d\n", insert_and_extend(&qf, *ret_index, j, 0, 1, findpart(vals, i - 1, *ret_hash, *ret_hash_len, qbits, rbits), 0, QF_KEY_IS_HASH | QF_NO_LOCK));
 			}
-			else {
+			else if (ret == 1) {
 				nn = malloc(sizeof(ilist));
 				nn->i = j & ((1 << (qbits + rbits)) - 1);
 				sglib_hashed_ilist_add(htab, nn);
@@ -262,8 +274,13 @@ int main(int argc, char **argv)
 				val_cnt++;
 				l++;
 			}
+			else {
+				printf("other error\n");
+				break;
+			}
 		}
 	}
+	avgFill += (double)i / nslots;
 	printf("made %lu inserts\n", i);
 	printf("extended %lu times\n", k);
 	
@@ -288,7 +305,7 @@ int main(int argc, char **argv)
 	}
 	
 	end_time = clock();
-	printf("completed in time %ld\n", end_time - start_time);
+	printf("completed in time %ld us\n", end_time - start_time);
 	printf("performed %d queries from a universe of size %d on a filter with %d items\n", num_queries, universe, num_inserts);
 	printf("false positive rate: %f\n", (double)count_fp / num_queries);
 	
@@ -298,5 +315,12 @@ int main(int argc, char **argv)
 	for(ll=sglib_hashed_ilist_it_init(&it,htab); ll!=NULL; ll=sglib_hashed_ilist_it_next(&it)) {
 		free(ll);
 	}
+	avgTime += (end_time - start_time);
+	avgFP += (double)count_fp / num_queries;
+	}
+	printf("\nperformed %d trials\n", trials);
+	printf("avg false positive rate: %f\n", avgFP / trials);
+	printf("avg fill rate: %f\n", avgFill / trials);
+	printf("avg computation time: %f\n", avgTime / trials);
 }
 

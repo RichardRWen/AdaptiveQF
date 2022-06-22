@@ -662,7 +662,7 @@ static inline uint64_t find_first_empty_slot(QF *qf, uint64_t from)
 	do {
 		int t = offset_lower_bound(qf, from);
 		if (t < 0) {
-			printf("error in t\n");
+			//printf("error in t\n");
 			bp();
 			//printf("%d\n", t);
 			offset_lower_bound(qf, from);

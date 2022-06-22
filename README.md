@@ -49,20 +49,21 @@ of select on machine words to work on CPUs older than Haswell.
 To build on a Haswell or newer hardware:
 ```bash
  $ make test
- $ ./test 8 7 100000000 1000 1000000
+ $ ./test 8 7 100000000 1000 1000000 20
 ```
 
 To build on an older hardare (older than Haswell):
 ```bash
  $ make NH=1 test
- $ ./test 8 7 100000000 1000 1000000
+ $ ./test 8 7 100000000 1000 1000000 20
  ```
  
- The arguments for the test program are [log of filter size] [number of remainder bits] [universe size] [number of inserts] [number of queries]
+ The arguments for the test program are [log of filter size] [number of remainder bits] [universe size] [number of inserts] [number of queries] [number of trials]
  If the number of inserts exceeds the filter size, the filter will perform inserts until full
  For example, ./test 8 7 100000000 1000 1000000 will make a filter of size 2^8 = 128 using 7 bits per slot,
               then insert 1000 random items from a universe of size 100000000 (or until full),
               then make 1000000 queries to test the false positive rate
+              This will be done 20 times and averaged info will be reported
 
 Contributing
 ------------

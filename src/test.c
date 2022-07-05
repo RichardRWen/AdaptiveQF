@@ -25,6 +25,47 @@
 
 #include "sglib.h"
 
+int bp2() {
+	return 0;
+}
+
+int snapshot(QF *qf) {
+	FILE *fp = fopen("output.txt", "w");
+	if (fp == NULL) return 0;
+	char buffer1[128];
+	char buffer2[256];
+	bzero(buffer1, 128);
+	bzero(buffer2, 256);
+	int i, j;
+	for (i = 0; i * 64 < qf->metadata->xnslots; i++) {
+		uint64_t occupied = get_block(qf, i)->occupieds[0];
+		for (j = 0; j < 64; j++) {
+			buffer1[63 - j] = '0' + occupied % 2;
+			occupied >>= 1;
+		}
+		sprintf(buffer2, "%d\t%s\n", i, buffer1);
+		//printf("%s", buffer2);
+		fputs(buffer2, fp);
+		uint64_t runend = get_block(qf, i)->runends[0];
+		for (j = 0; j < 64; j++) {
+			buffer1[63 - j] = '0' + runend % 2;
+			runend >>= 1;
+		}
+		sprintf(buffer2, "\t%s\n", buffer1);
+		//printf("%s", buffer2);
+		fputs(buffer2, fp);
+		uint64_t extension = get_block(qf, i)->extensions[0];
+		for (j = 0; j < 64; j++) {
+			buffer1[63 - j] = '0' + extension % 2;
+			extension >>= 1;
+		}
+		sprintf(buffer2, "\t%s\n", buffer1);
+		fputs(buffer2, fp);
+	}
+	fclose(fp);
+	return 1;
+}
+
 struct _keyValuePair {
 	uint64_t key;
 	uint64_t val;
@@ -137,16 +178,23 @@ void printbin(uint64_t val) {
 
 int main(int argc, char **argv)
 {
-	if (argc < 6) {
+	if (argc < 7) {
 		fprintf(stderr, "Please specify \nthe log of the number of slots in the QF\nthe number of remainder bits in the QF\nthe universe size\nthe number of inserts\nthe number of queries\nthe number of trials\n");
 		// eg. ./test 8 7 100000000 20000000 1000000 20
+		// ./test 16 7 100000000 20000000 1000000 1 3
 		exit(1);
 	}
-	
-	srand(time(NULL));
+	if (argc >= 8) {
+		srand(atoi(argv[7]));
+	}
+	else {
+		srand(time(NULL));
+		//srand(3);
+	}
 	double avgTime = 0, avgFP = 0, avgFill = 0;
+	int numtrials = atoi(argv[6]);
 	int trials = 0;
-	for (; trials < 20; trials++) {
+	for (; trials < numtrials; trials++) {
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t rbits = atoi(argv[2]);
@@ -203,6 +251,12 @@ int main(int argc, char **argv)
 	printf("collided query expected, got %d\n", qf_insert_ret(&qf, 1 + qf.metadata->range, 0, 1, QF_KEY_IS_HASH | QF_NO_LOCK, ret_index, ret_hash, ret_hash_len));
 	printf("extended length: %d\n", insert_and_extend(&qf, *ret_index, 1 + qf.metadata->range, 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK));*/
 	
+	/*qf_insert_ret(&qf, 1, 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
+	printf("%d\n", qf_insert_ret(&qf, 1 + (1 << (qbits + rbits)), 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len));
+	insert_and_extend(&qf, *ret_index, 1 + (1 << (qbits + rbits)), 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
+	snapshot(&qf);
+	abort();*/
+	
 	if (0) {
 		printf("%d\n", QF_COULDNT_LOCK);
 		uint64_t q = 0, p = 0, m;
@@ -230,12 +284,15 @@ int main(int argc, char **argv)
 	int break_cond = 0;
 	
 	uint64_t i, j, k = 0, l = 0;
-	for (i = 0; i < num_inserts && l < nslots;i++) {
+	for (i = 0; i < num_inserts && l < nslots;) {
 		j = (uint64_t)(rand() % universe);
 		//printf("inserting %lu\n", j);
 		//if (values == NULL || getItem(values, j)->key != j) {
 		ii.i = j & ((1 << (qbits + rbits)) - 1);
-		while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
+		if (i == 0) {
+			printf("first item inserted: %lu\n", ii.i);
+		}
+		/*while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
 			ii.i++;
 			if (ii.i >= (1 << (qbits + rbits))) ii.i = 0;
 			if (ii.i == (j & ((1 << (qbits + rbits)) - 1))) {
@@ -243,11 +300,11 @@ int main(int argc, char **argv)
 				break;
 			}
 		}
-		if (break_cond) break;
+		if (break_cond) break;*/
     		if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) {
 			int ret = qf_insert_ret(&qf, j, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
 			if (ret == QF_NO_SPACE) {
-				printf("filter is full after %lu inserts\n", i);
+				printf("filter is full\n");
 				break;
 			}
 			else if (ret == 0) {
@@ -255,11 +312,12 @@ int main(int argc, char **argv)
 					//printf("wanted to extend, skipping for testing\n");
 					k++;
 					l += 3;
+					i++;
 					continue;
 				}
 				ret = insert_and_extend(&qf, *ret_index, j, 0, 1, getItem(values, *ret_hash)->val, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
 				if (ret == QF_NO_SPACE) {
-					printf("filter is full after %lu inserts\n", i);
+					printf("filter is full\n");
 					break;
 				}
 				//printf("extended to length %d\n", insert_and_extend(&qf, *ret_index, j, 0, 1, findpart(vals, i - 1, *ret_hash, *ret_hash_len, qbits, rbits), 0, QF_KEY_IS_HASH | QF_NO_LOCK));
@@ -274,18 +332,24 @@ int main(int argc, char **argv)
 				val_cnt++;
 				l++;
 			}
+			/*else if (ret == -5) {
+				continue;
+			}*/
 			else {
-				printf("other error\n");
+				printf("other error: %d\n", ret);
 				break;
 			}
+			i++;
 		}
 	}
 	avgFill += (double)i / nslots;
 	printf("made %lu inserts\n", i);
 	printf("extended %lu times\n", k);
+	//printf("%lu\n", qf_get_num_occupied_slots(&qf));
 	
 	int r;
 	for (i = 0; i < num_queries; i++) {
+		//printf("%lu\n", i);
 		j = (uint64_t)(rand() % universe);
 		//if (qf_query(&qf, j, 0, ret_index, ret_hash, QF_KEY_IS_HASH) && getItem(values, j)->key != j) {
 		ii.i = j & ((1 << rbits) - 1);
@@ -318,9 +382,9 @@ int main(int argc, char **argv)
 	avgTime += (end_time - start_time);
 	avgFP += (double)count_fp / num_queries;
 	}
-	printf("\nperformed %d trials\n", trials);
-	printf("avg false positive rate: %f\n", avgFP / trials);
-	printf("avg fill rate: %f\n", avgFill / trials);
-	printf("avg computation time: %f\n", avgTime / trials);
+	printf("\nperformed %d trials\n", numtrials);
+	printf("avg false positive rate: %f\n", avgFP / numtrials);
+	printf("avg fill rate: %f\n", avgFill / numtrials);
+	printf("avg computation time: %f\n", avgTime / numtrials);
 }
 

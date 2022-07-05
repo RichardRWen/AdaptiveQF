@@ -77,6 +77,7 @@ struct _keyValuePair {
 
 struct _ilist {
 	int i;
+	int j;
 	int length;
 	struct ilist *next;
 } typedef ilist;
@@ -283,23 +284,28 @@ int main(int argc, char **argv)
 	ilist_iter it;
 	int break_cond = 0;
 	
+	if (universe < (double)qf.metadata->range * 0.8) {
+		printf("warning: universe may be too small to fill filter to completion\n");
+	}
+	
 	uint64_t i, j, k = 0, l = 0;
 	for (i = 0; i < num_inserts && l < 0.95 * (double)nslots;) {
 		j = (uint64_t)(rand() % universe);
 		//printf("inserting %lu\n", j);
 		//if (values == NULL || getItem(values, j)->key != j) {
-		ii.i = j & ((1 << (qbits + rbits)) - 1);
+		//ii.i = j & ((1 << (qbits + rbits)) - 1);
+		ii.i = j;
 		/*if (i == 0) {
 			printf("first item inserted: %lu\n", ii.i);
 		}*/
-		while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
+		/*while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
 			ii.i++;
 			if (ii.i >= (1 << (qbits + rbits))) ii.i = 0;
 			if (ii.i == (j & ((1 << (qbits + rbits)) - 1))) {
 				break_cond = 1;
 				break;
 			}
-		}
+		}*/
 		if (break_cond) break;
     		if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) {
 			int ret = qf_insert_ret(&qf, j, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
@@ -324,7 +330,8 @@ int main(int argc, char **argv)
 			}
 			else if (ret == 1) {
 				nn = malloc(sizeof(ilist));
-				nn->i = j & ((1 << (qbits + rbits)) - 1);
+				//nn->i = j & ((1 << (qbits + rbits)) - 1);
+				nn->i = j;
 				sglib_hashed_ilist_add(htab, nn);
 				/*val_mem[val_cnt].key = val_mem[val_cnt].val = j & BITMASK(rbits);
 				val_mem[val_cnt].left = val_mem[val_cnt].right = NULL;
@@ -341,6 +348,9 @@ int main(int argc, char **argv)
 			}
 			i++;
 		}
+		else {
+			//printf("super hard collide: %lu\n", j);
+		}
 	}
 	avgFill += (double)i / nslots;
 	printf("made %lu inserts\n", i);
@@ -349,6 +359,7 @@ int main(int argc, char **argv)
 	avgInsTime += (clock() - start_time);
 	start_time = clock();
 	
+	printf("starting %d queries...\n", num_queries);
 	int r;
 	for (i = 0; i < num_queries; i++) {
 		//printf("%lu\n", i);

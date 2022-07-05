@@ -191,7 +191,7 @@ int main(int argc, char **argv)
 		srand(time(NULL));
 		//srand(3);
 	}
-	double avgTime = 0, avgFP = 0, avgFill = 0;
+	double avgInsTime = 0, avgQryTime = 0, avgFP = 0, avgFill = 0;
 	int numtrials = atoi(argv[6]);
 	int trials = 0;
 	for (; trials < numtrials; trials++) {
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
 	
 	/*qf_insert_ret(&qf, 1, 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
 	printf("%d\n", qf_insert_ret(&qf, 1 + (1 << (qbits + rbits)), 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len));
-	insert_and_extend(&qf, *ret_index, 1 + (1 << (qbits + rbits)), 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
+	//insert_and_extend(&qf, *ret_index, 1 + (1 << (qbits + rbits)), 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
 	snapshot(&qf);
 	abort();*/
 	
@@ -284,15 +284,15 @@ int main(int argc, char **argv)
 	int break_cond = 0;
 	
 	uint64_t i, j, k = 0, l = 0;
-	for (i = 0; i < num_inserts && l < nslots;) {
+	for (i = 0; i < num_inserts && l < 0.95 * (double)nslots;) {
 		j = (uint64_t)(rand() % universe);
 		//printf("inserting %lu\n", j);
 		//if (values == NULL || getItem(values, j)->key != j) {
 		ii.i = j & ((1 << (qbits + rbits)) - 1);
-		if (i == 0) {
+		/*if (i == 0) {
 			printf("first item inserted: %lu\n", ii.i);
-		}
-		/*while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
+		}*/
+		while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
 			ii.i++;
 			if (ii.i >= (1 << (qbits + rbits))) ii.i = 0;
 			if (ii.i == (j & ((1 << (qbits + rbits)) - 1))) {
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
 				break;
 			}
 		}
-		if (break_cond) break;*/
+		if (break_cond) break;
     		if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) {
 			int ret = qf_insert_ret(&qf, j, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
 			if (ret == QF_NO_SPACE) {
@@ -346,6 +346,8 @@ int main(int argc, char **argv)
 	printf("made %lu inserts\n", i);
 	printf("extended %lu times\n", k);
 	//printf("%lu\n", qf_get_num_occupied_slots(&qf));
+	avgInsTime += (clock() - start_time);
+	start_time = clock();
 	
 	int r;
 	for (i = 0; i < num_queries; i++) {
@@ -379,12 +381,13 @@ int main(int argc, char **argv)
 	for(ll=sglib_hashed_ilist_it_init(&it,htab); ll!=NULL; ll=sglib_hashed_ilist_it_next(&it)) {
 		free(ll);
 	}
-	avgTime += (end_time - start_time);
+	avgQryTime += (end_time - start_time);
 	avgFP += (double)count_fp / num_queries;
 	}
 	printf("\nperformed %d trials\n", numtrials);
 	printf("avg false positive rate: %f\n", avgFP / numtrials);
 	printf("avg fill rate: %f\n", avgFill / numtrials);
-	printf("avg computation time: %f\n", avgTime / numtrials);
+	printf("avg total insert time: %f\n", avgInsTime / numtrials);
+	printf("avg total query time: %f\n", avgQryTime / numtrials);
 }
 

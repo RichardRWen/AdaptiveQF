@@ -76,18 +76,18 @@ struct _keyValuePair {
 #define HASH_TABLE_SIZE  1000000
 
 struct _ilist {
-	int i;
-	int j;
-	int length;
+	uint64_t val; // the value of the actual item
+	uint64_t rem; // the remainder representing the item in the filter including extensions
+	int len; // the number of bits used by the remainder
 	struct ilist *next;
 } typedef ilist;
 typedef struct sglib_hashed_ilist_iterator ilist_iter;
 ilist *htab[HASH_TABLE_SIZE];
 
-#define ILIST_COMPARATOR(e1, e2)    (e1->i - e2->i)
+#define ILIST_COMPARATOR(e1, e2)    ((e1->rem + (1 << e1->len)) - (e2->rem + (1 << e2->len)))
 
 unsigned int ilist_hash_function(ilist *e) {
-	return e->i;
+	return e->rem + (1 << e->len);
 }
 
 SGLIB_DEFINE_LIST_PROTOTYPES(ilist, ILIST_COMPARATOR, next)
@@ -177,12 +177,17 @@ void printbin(uint64_t val) {
 	printf("\n");
 }
 
+ilist *find_ilist(uint64_t hash) {
+	return NULL;
+}
+
+double squeeze = 45;
 int main(int argc, char **argv)
 {
 	if (argc < 7) {
 		fprintf(stderr, "Please specify \nthe log of the number of slots in the QF\nthe number of remainder bits in the QF\nthe universe size\nthe number of inserts\nthe number of queries\nthe number of trials\n");
 		// eg. ./test 8 7 100000000 20000000 1000000 20
-		// ./test 16 7 100000000 20000000 1000000 1 3
+		// ./test 16 7 100000000 20000000 1000000 1 0
 		exit(1);
 	}
 	if (argc >= 8) {
@@ -230,9 +235,6 @@ int main(int argc, char **argv)
 	uint64_t *ret_hash = malloc(sizeof(uint64_t));
 	uint64_t *ret_hash_len = malloc(sizeof(uint64_t));
 	
-	clock_t start_time, end_time;
-	start_time = clock();
-	
 	/*printf("insert returned %lu\n", qf_insert(&qf, 1, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH));
 	printf("insert returned %lu\n", qf_insert(&qf, 2, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH));
 	
@@ -254,7 +256,11 @@ int main(int argc, char **argv)
 	
 	/*qf_insert_ret(&qf, 1, 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
 	printf("%d\n", qf_insert_ret(&qf, 1 + (1 << (qbits + rbits)), 0, 1, QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len));
-	//insert_and_extend(&qf, *ret_index, 1 + (1 << (qbits + rbits)), 0, 1, 1, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
+	if (insert_and_extend(&qf, *ret_index, 1 + (1 << (qbits + rbits)), 0, 1, 1, 0, ret_hash, ret_hash_len, QF_KEY_IS_HASH | QF_NO_LOCK) > 0) {
+		printf("one fingerprint extended to %lu\n", *ret_hash);
+		printf("one fingerprint extended to %lu\n", *ret_hash_len);
+	}
+	printf("%lu\n", find_first_test(&qf, 0)); // tests find_first_empty_slot
 	snapshot(&qf);
 	abort();*/
 	
@@ -282,75 +288,98 @@ int main(int argc, char **argv)
 	sglib_hashed_ilist_init(htab);
 	ilist ii, *nn, *ll;
 	ilist_iter it;
-	int break_cond = 0;
 	
 	if (universe < (double)qf.metadata->range * 0.8) {
 		printf("warning: universe may be too small to fill filter to completion\n");
 	}
 	
+	clock_t start_time, end_time;
+	start_time = clock();
+	
 	uint64_t i, j, k = 0, l = 0;
-	for (i = 0; i < num_inserts && l < 0.95 * (double)nslots;) {
-		j = (uint64_t)(rand() % universe);
+	double z, y, x;
+	for (i = 0; i < num_inserts;) {
+		j = (uint64_t)(rand() % universe); // pick a random number
+		/*z = (double)rand() / (double)RAND_MAX;
+		y = (double)rand() / (double)RAND_MAX;
+		x = sqrt(-2 * log(z)) * cos(2 * M_PI * y) + squeeze / 2;
+		j = (uint64_t) (x * (double)universe / squeeze);*/
+		//printf("%f\n", x);
 		//printf("inserting %lu\n", j);
 		//if (values == NULL || getItem(values, j)->key != j) {
 		//ii.i = j & ((1 << (qbits + rbits)) - 1);
-		ii.i = j;
 		/*if (i == 0) {
 			printf("first item inserted: %lu\n", ii.i);
 		}*/
-		/*while (sglib_hashed_ilist_find_member(htab, &ii) != NULL) {
-			ii.i++;
-			if (ii.i >= (1 << (qbits + rbits))) ii.i = 0;
-			if (ii.i == (j & ((1 << (qbits + rbits)) - 1))) {
-				break_cond = 1;
-				break;
-			}
-		}*/
-		if (break_cond) break;
-    		if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) {
-			int ret = qf_insert_ret(&qf, j, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len);
-			if (ret == QF_NO_SPACE) {
+		//ii.rem = j;
+    		//if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) { // if the number is unique
+			int ret = qf_insert_ret(&qf, j, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH, ret_index, ret_hash, ret_hash_len); // attempt to insert
+			if (ret == QF_NO_SPACE) { // if filter is full, stop
 				printf("filter is full\n");
 				break;
 			}
-			else if (ret == 0) {
-				if (1) {
+			else if (ret == 0) { // if a matching fingerprint is found, search hash table for original item
+				if (0) {
+					continue;
+				}
+				if (0) {
 					//printf("wanted to extend, skipping for testing\n");
 					k++;
 					l += 3;
 					i++;
 					continue;
 				}
-				ret = insert_and_extend(&qf, *ret_index, j, 0, 1, getItem(values, *ret_hash)->val, 0, QF_KEY_IS_HASH | QF_NO_LOCK);
-				if (ret == QF_NO_SPACE) {
-					printf("filter is full\n");
-					break;
+				ii.rem = *ret_hash;
+				ii.len = *ret_hash_len;
+				ilist *item_in_table = sglib_hashed_ilist_find_member(htab, &ii);
+				if (item_in_table == NULL) printf("error:\tfilter claimed to have fingerprint %lu but hashtable could not find it\n", ii.rem);
+				else if (item_in_table->val == j) printf("log:\trandom insert %lu would have been duplicate, skipping\n", ii.rem);
+				else {
+					uint64_t new_rem, upd_rem;
+					int ext_len = insert_and_extend(&qf, *ret_index, j, 0, 1, item_in_table->val, 0, &new_rem, &upd_rem, QF_KEY_IS_HASH | QF_NO_LOCK);
+					if (ext_len == QF_NO_SPACE) {
+						printf("filter is full\n");
+						break;
+					}
+					nn = malloc(sizeof(ilist));
+					nn->val = item_in_table->val;
+					nn->rem = upd_rem;
+					nn->len = ext_len;
+					sglib_hashed_ilist_delete(htab, item_in_table);
+					free(item_in_table);
+					sglib_hashed_ilist_add(htab, nn);
+					nn = malloc(sizeof(ilist));
+					nn->val = j;
+					nn->rem = new_rem;
+					nn->len = ext_len;
+					sglib_hashed_ilist_add(htab, nn);
+					//printf("extended to length %d\n", insert_and_extend(&qf, *ret_index, j, 0, 1, findpart(vals, i - 1, *ret_hash, *ret_hash_len, qbits, rbits), 0, QF_KEY_IS_HASH | QF_NO_LOCK));
+					k++;
+					i++;
 				}
-				//printf("extended to length %d\n", insert_and_extend(&qf, *ret_index, j, 0, 1, findpart(vals, i - 1, *ret_hash, *ret_hash_len, qbits, rbits), 0, QF_KEY_IS_HASH | QF_NO_LOCK));
 			}
 			else if (ret == 1) {
 				nn = malloc(sizeof(ilist));
-				//nn->i = j & ((1 << (qbits + rbits)) - 1);
-				nn->i = j;
+				nn->val = j;
+				nn->rem = *ret_hash;
+				nn->len = *ret_hash_len;
 				sglib_hashed_ilist_add(htab, nn);
 				/*val_mem[val_cnt].key = val_mem[val_cnt].val = j & BITMASK(rbits);
 				val_mem[val_cnt].left = val_mem[val_cnt].right = NULL;
-				values = insertItem(values, &(val_mem[val_cnt]));*/
-				val_cnt++;
-				l++;
+				values = insertItem(values, &(val_mem[val_cnt]));
+				val_cnt++;*/
+				//l++;
+				i++;
 			}
 			/*else if (ret == -5) {
 				continue;
 			}*/
 			else {
-				printf("other error: %d\n", ret);
+				printf("other error: errno %d\n", ret);
 				break;
 			}
-			i++;
-		}
-		else {
-			//printf("super hard collide: %lu\n", j);
-		}
+			//i++;
+		//}
 	}
 	avgFill += (double)i / nslots;
 	printf("made %lu inserts\n", i);
@@ -365,18 +394,20 @@ int main(int argc, char **argv)
 		//printf("%lu\n", i);
 		j = (uint64_t)(rand() % universe);
 		//if (qf_query(&qf, j, 0, ret_index, ret_hash, QF_KEY_IS_HASH) && getItem(values, j)->key != j) {
-		ii.i = j & ((1 << rbits) - 1);
-		if (qf_query(&qf, j, 0, ret_index, ret_hash, QF_KEY_IS_HASH)) {
-			//count_p++;
+		//ii.rem = j & ((1 << rbits) - 1);
+		if (qf_query(&qf, j, 0, ret_index, ret_hash, ret_hash_len, QF_KEY_IS_HASH)) {
+			count_p++;
+			ii.rem = *ret_hash;
+			ii.len = *ret_hash_len;
 			if (sglib_hashed_ilist_find_member(htab, &ii) == NULL) {
 				count_fp++;
 				if (1) {
 					continue;
 				}
-				if (qf_adapt(&qf, *ret_index, *ret_hash, j, QF_KEY_IS_HASH) == -2) {
-					printf("ran out of space after %lu queries\n", i);
+				/*if (qf_adapt(&qf, *ret_index, *ret_hash, j, QF_KEY_IS_HASH) == -2) { // TODO: when reactivating this, need to add code to modify hash table
+					printf("ran out of space to adapt after %lu queries\n", i);
 					break;
-				}
+				}*/
 			}
 		}
 	}
@@ -384,7 +415,7 @@ int main(int argc, char **argv)
 	end_time = clock();
 	printf("completed in time %ld us\n", end_time - start_time);
 	printf("performed %d queries from a universe of size %d on a filter with %d items\n", num_queries, universe, num_inserts);
-	printf("false positive rate: %f\n", (double)count_fp / num_queries);
+	printf("false positive rate: %f\n", (double)count_fp / count_p);
 	
 	free(ret_index);
 	free(ret_hash);
@@ -393,7 +424,7 @@ int main(int argc, char **argv)
 		free(ll);
 	}
 	avgQryTime += (end_time - start_time);
-	avgFP += (double)count_fp / num_queries;
+	avgFP += (double)count_fp / count_p;
 	}
 	printf("\nperformed %d trials\n", numtrials);
 	printf("avg false positive rate: %f\n", avgFP / numtrials);

@@ -146,6 +146,15 @@ int find(uint64_t* array, int len, uint64_t item) {
 	return 0;
 }
 
+uint64_t hash_str(char *str) {
+	uint64_t hash = 5381;
+	int c;
+	while ((c = *str++)) {
+		hash = ((hash << 5) + hash) + c;
+	}
+	return hash;
+}
+
 // returns the number of low order bits on which hash1 and hash2 match
 int hashCmp(uint64_t hash1, uint64_t hash2) {
 	//printf("hashCmp: %lu, %lu\n", hash1, hash2);
@@ -260,6 +269,9 @@ int main(int argc, char **argv)
 	else if (universe < expected_fill * 10) {
 		printf("warning: filling the filter may take longer than necessary because of low universe size\n");
 	}
+
+	FILE *shalla = fopen("data/shalla.txt", "r");
+	char buffer[256];
 	
 	double avgInsTime = 0, avgInsPer = 0, avgQryTime = 0, avgQryPer = 0, avgFP = 0, avgFill = 0, maxFP = 0;
 	double avgInsSlots = 0, avgQrySlots = 0;
@@ -288,7 +300,7 @@ int main(int argc, char **argv)
 		//uint64_t* values = malloc(sizeof(uint64_t) * num_inserts);
 		uint64_t *ret_index = malloc(sizeof(uint64_t));
 		uint64_t *ret_hash = malloc(sizeof(uint64_t));
-    uint64_t *ret_other_hash = malloc(sizeof(uint64_t));
+		uint64_t *ret_other_hash = malloc(sizeof(uint64_t));
 		int *ret_hash_len = malloc(sizeof(int));
 		
 		/*printf("insert returned %lu\n", qf_insert(&qf, 1, 0, 1, QF_NO_LOCK | QF_KEY_IS_HASH));
@@ -402,6 +414,8 @@ int main(int argc, char **argv)
 				bp2();
 			}*/
 			j = rand_uniform(universe); // pick a random number
+			//fgets(buffer, sizeof(buffer), shalla);
+			//j = hash_str(buffer);
 			if (j == -1804289383) {
 				bp2();
 			}
@@ -498,10 +512,16 @@ int main(int argc, char **argv)
 			printf("filter is full; skipping query adaptations\n");
 		}
 		for (i = 0; i < num_queries; i++) {
+			if (i == 180055) bp2();
 			//printf("%lu\n", i);
-			j = rand_uniform(universe);
+			
+			//j = rand_uniform(universe);
+			fgets(buffer, sizeof(buffer), shalla);
+			j = hash_str(buffer);
+
       //if (j == 582125609) bp2();
 			if (qf_query(&qf, j, ret_index, ret_hash, ret_hash_len, QF_KEY_IS_HASH)) {
+				if (*ret_index / 64 == 489) frame(&qf, *ret_index / 64, *ret_index % 64, i);
 				count_p++;
 				ii.rem = *ret_hash;
 				ii.len = *ret_hash_len;

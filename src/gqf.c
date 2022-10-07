@@ -1596,7 +1596,7 @@ static inline int insert(QF *qf, uint64_t hash, uint64_t count, uint64_t *ret_in
 	if (qf_get_num_occupied_slots(qf) == 4477) {
 		//bp1(qf, hash_bucket_index, hash_bucket_block_offset, hash_remainder);
 	}
-	if (hash_bucket_index / 64 == 942) {
+	if (hash_bucket_index / 64 == 489) {
 		if (qf_get_num_occupied_slots(qf) >= 16103) bp1(qf, hash_bucket_index, hash_bucket_block_offset, hash_remainder);
 		frame(qf, hash_bucket_index / 64, hash_bucket_block_offset, qf_get_num_occupied_slots(qf));
 	}
@@ -2425,6 +2425,14 @@ int match(const QF *qf, int64_t index, uint64_t hash) { // Takes an index and ha
 }
 
 int get_slot_info(const QF *qf, uint64_t index, uint64_t *ext, int *ext_slots, uint64_t *count, int *count_slots) {
+	if (is_extension(qf, index) || is_counter(qf, index)) {
+		bp1(qf, index, index % 64, 0);
+		*ext = -1;
+		*ext_slots = 0;
+		*count = 1;
+		*count_slots = 0;
+		return 1;
+	}
   assert(!is_extension(qf, index) && !is_counter(qf, index));
 
   int curr = ++index;

@@ -273,11 +273,11 @@ int main(int argc, char **argv)
 	FILE *shalla = fopen("data/shalla.txt", "r");
 	char buffer[256];
 	
-	FILE *progress = fopen("data/progress.txt", "w");
+	FILE *progress = fopen("data/progress.csv", "w");
 	sprintf(buffer, "queries,slots usage,false positive rate\n");
 	fputs(buffer, progress);
 	fclose(progress);
-	progress = fopen("data/progress.txt", "a");
+	progress = fopen("data/progress.csv", "a");
 	
 	double avgInsTime = 0, avgInsPer = 0, avgQryTime = 0, avgQryPer = 0, avgFP = 0, avgFill = 0, maxFP = 0;
 	double avgInsSlots = 0, avgQrySlots = 0;
@@ -537,9 +537,7 @@ int main(int argc, char **argv)
 		double fpr = count_fp;
 		fpr /= i_2;
 		uint64_t slots = qf_get_num_occupied_slots(&qf);
-		double fillr = slots;
-		fillr /= nslots;
-		sprintf(buffer, "%lu,%f,%f\n", i, fillr, fpr);
+		sprintf(buffer, "%lu,%lu,%f\n", i, slots, fpr);
 		fputs(buffer, progress);
 
 		while (i < num_queries) {
@@ -589,9 +587,7 @@ int main(int argc, char **argv)
 			fpr = count_fp;
 			fpr /= i_2;
 			slots = qf_get_num_occupied_slots(&qf);
-			fillr = slots;
-			fillr /= nslots;
-			sprintf(buffer, "%lu,%f,%f\n", i, fillr, fpr);
+			sprintf(buffer, "%lu,%lu,%f\n", i, slots, fpr);
 			fputs(buffer, progress);
 		}
 		

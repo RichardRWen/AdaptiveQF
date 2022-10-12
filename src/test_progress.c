@@ -541,7 +541,7 @@ int main(int argc, char **argv)
 		fputs(buffer, progress);
 
 		while (i < num_queries) {
-			for (i_2 = i; i - i_2 < 10000; i++) {
+			for (i_2 = i; i - i_2 < 100; i++) {
 				//j = rand_uniform(universe);
 				j = rand_zipfian(1.01, 1000000);
 				//fgets(buffer, sizeof(buffer), shalla);
@@ -572,7 +572,7 @@ int main(int argc, char **argv)
 				}
 			}
 			count_fp = 0;
-			for (i_2 = 0; i_2 < 100000; i_2++) {
+			for (i_2 = 0; i_2 < 10000; i_2++) {
 				j = rand_zipfian(1.01, 1000000);
 
 				if (qf_query(&qf, j, ret_index, ret_hash, ret_hash_len, QF_KEY_IS_HASH)) {

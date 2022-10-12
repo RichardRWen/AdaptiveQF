@@ -1596,8 +1596,8 @@ static inline int insert(QF *qf, uint64_t hash, uint64_t count, uint64_t *ret_in
 	if (qf_get_num_occupied_slots(qf) == 4477) {
 		//bp1(qf, hash_bucket_index, hash_bucket_block_offset, hash_remainder);
 	}
-	if (hash_bucket_index / 64 == 489) {
-		if (qf_get_num_occupied_slots(qf) >= 16103) bp1(qf, hash_bucket_index, hash_bucket_block_offset, hash_remainder);
+	if (hash_bucket_index / 64 == 839) {
+		if (qf_get_num_occupied_slots(qf) >= 0) bp1(qf, hash_bucket_index, hash_bucket_block_offset, hash_remainder);
 		frame(qf, hash_bucket_index / 64, hash_bucket_block_offset, qf_get_num_occupied_slots(qf));
 	}
 	if (might_be_empty(qf, hash_bucket_index) && runend_index == hash_bucket_index) { /* Empty slot */

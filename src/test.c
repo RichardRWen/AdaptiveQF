@@ -414,6 +414,7 @@ int main(int argc, char **argv)
 				bp2();
 			}*/
 			j = rand_uniform(universe); // pick a random number
+			//j = rand_zipfian(1.01, 100000000);
 			//fgets(buffer, sizeof(buffer), shalla);
 			//j = hash_str(buffer);
 			if (j == -1804289383) {
@@ -512,12 +513,13 @@ int main(int argc, char **argv)
 			printf("filter is full; skipping query adaptations\n");
 		}
 		for (i = 0; i < num_queries; i++) {
-			if (i == 180055) bp2();
 			//printf("%lu\n", i);
 			
-			//j = rand_uniform(universe);
-			fgets(buffer, sizeof(buffer), shalla);
-			j = hash_str(buffer);
+			j = rand_uniform(universe);
+			if (j == 6907711552940998528) bp2();
+			//j = rand_zipfian(1.01, 1000000);
+			//fgets(buffer, sizeof(buffer), shalla);
+			//j = hash_str(buffer);
 
       //if (j == 582125609) bp2();
 			if (qf_query(&qf, j, ret_index, ret_hash, ret_hash_len, QF_KEY_IS_HASH)) {
@@ -526,6 +528,7 @@ int main(int argc, char **argv)
 				ii.rem = *ret_hash;
 				ii.len = *ret_hash_len;
 				ilist *potential_item = sglib_hashed_ilist_find_member(htab, &ii);
+				if (potential_item == NULL) bp2();
 				if (potential_item == NULL || potential_item->val != j) {
           if (potential_item == NULL) {
             bp2();
